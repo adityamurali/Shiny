@@ -1,15 +1,16 @@
+#Import libraries
 library(tidyverse)
 library(ggplot2)
 library(dplyr)
 library(data.table)
 library(tidyr)
 library(shiny)
-#install.packages("leaflet")
 library(leaflet)
 
 #Read the data
 data <- read_csv('Vehicle_Accident_Data.csv')
 
+#Data Preprocessing
 #Extract dates from the Crash Date/Time field
 data$Date <- as.Date(data$`Crash Date/Time`, format = "%m/%d/%Y" )
 
@@ -57,7 +58,6 @@ data$`Intersecting Street Suffix` <- NULL
 newdata <- subset(x = data, data$long != 0.00000 & data$long != -100.0076 )
 
 df <- as.data.frame(newdata)
-
 
 #UI code for Shiny App
 ui <- fluidPage(
