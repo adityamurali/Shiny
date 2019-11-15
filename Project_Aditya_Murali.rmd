@@ -21,7 +21,7 @@ data$Flag <- NULL
 data$`Club Logo` <- NULL
 
 #Convert Value from character to numeric
-data$Value <- gsub(pattern = "???", replacement = "", x=data$Value)
+data$Value <- gsub(pattern = "€", replacement = "", x=data$Value)
 data$MultiplyValue <- ifelse(str_detect(data$Value,"M"), 1000000, 1000) 
 data$Value <- gsub(pattern = "M", replacement = "", x=data$Value)
 data$Value <- gsub(pattern = "K", replacement = "", x=data$Value)
@@ -29,7 +29,7 @@ data$Value <- as.numeric(data$Value)
 data$Value <- data$Value * data$MultiplyValue
 
 #Convert Wages from character to numeric
-data$Wage <- gsub(pattern = "???", replacement = "", x=data$Wage)
+data$Wage <- gsub(pattern = "€", replacement = "", x=data$Wage)
 data$Wage <- gsub(pattern = "K", replacement = "", x=data$Wage)
 data$Wage <- as.numeric(data$Wage)
 data$Wage <- data$Wage * 1000
@@ -82,7 +82,7 @@ data[,26:51] <- NULL
 fifa <- cbind.data.frame(data, dff)
 
 #Convert Release Clause into Numeric
-fifa$`Release Clause` <- gsub(pattern = "???", replacement = "", x= fifa$`Release Clause`)
+fifa$`Release Clause` <- gsub(pattern = "€", replacement = "", x= fifa$`Release Clause`)
 fifa$MultiplyValue <- ifelse(str_detect(fifa$`Release Clause`,"M"), 1000000, 1000) 
 fifa$`Release Clause` <- gsub(pattern = "M", replacement = "", x= fifa$`Release Clause`)
 fifa$`Release Clause` <- gsub(pattern = "K", replacement = "", x= fifa$`Release Clause`)
