@@ -1,0 +1,281 @@
+
+```{r}
+#LOAD REQUIRED LIBRARIES
+library(tidyverse)
+library(tidyr)
+library(corrplot)
+library(glmnet)
+library(mlbench)
+library(caret)
+library(sqldf)
+```
+```{r}
+#READ THE DATA
+data <- read_csv("fifa.csv")
+```
+```{r}
+#TRANSFORM ALL FIELDS TO NUMERIC TO VISUALIZE CORRELATION
+#Drop Photo, Flag, Club Logo
+data$Photo <- NULL
+data$Flag <- NULL
+data$`Club Logo` <- NULL
+
+#Convert Value from character to numeric
+data$Value <- gsub(pattern = "???", replacement = "", x=data$Value)
+data$MultiplyValue <- ifelse(str_detect(data$Value,"M"), 1000000, 1000) 
+data$Value <- gsub(pattern = "M", replacement = "", x=data$Value)
+data$Value <- gsub(pattern = "K", replacement = "", x=data$Value)
+data$Value <- as.numeric(data$Value)
+data$Value <- data$Value * data$MultiplyValue
+
+#Convert Wages from character to numeric
+data$Wage <- gsub(pattern = "???", replacement = "", x=data$Wage)
+data$Wage <- gsub(pattern = "K", replacement = "", x=data$Wage)
+data$Wage <- as.numeric(data$Wage)
+data$Wage <- data$Wage * 1000
+
+#Convert Nationality into factors
+data$Nationality <- as.factor(data$Nationality)
+
+#Convert Club into factors
+data$Club <- as.factor(data$Club)
+
+#Convert Preferred Foot into factors
+data$`Preferred Foot` <- as.factor(data$`Preferred Foot`)
+
+#Convert Weight into numeric
+data$Weight <- gsub(pattern = "lbs", replacement = "", x=data$Weight)
+data$Weight <- as.numeric(data$Weight)
+
+#Convert Work Rate into factors
+data$`Work Rate` <- as.factor(data$`Work Rate`)
+
+#Convert Body type into factors
+data$`Body Type` <- as.factor(data$`Body Type`)
+
+#Convert Real Face into factors
+data$`Real Face` <- as.factor(data$`Real Face`)
+
+#Convert Position into factors
+data$Position <- as.factor(data$Position)
+
+#Convert Height into cm
+data$Height <- as.numeric(vapply(strsplit(data$Height,"'"), `[`, 1, FUN.VALUE=character(1)))*12 + as.numeric(vapply(strsplit(data$Height,"'"), `[`, 2, FUN.VALUE=character(1)))
+data$HeightFeet <- NULL
+
+dff <- data[,26:51]
+
+def_fun <- function(x){
+  a <- strsplit(x, '\\+')
+  for (i in length(a)){
+    b <- sum(as.numeric(a[[i]]))
+  }
+  return (b)
+}
+
+for (i in 1: ncol(dff)){
+  dff[i] <- apply(dff[i], 1, FUN = def_fun)
+}
+
+data[,26:51] <- NULL
+
+fifa <- cbind.data.frame(data, dff)
+
+#Convert Release Clause into Numeric
+fifa$`Release Clause` <- gsub(pattern = "???", replacement = "", x= fifa$`Release Clause`)
+fifa$MultiplyValue <- ifelse(str_detect(fifa$`Release Clause`,"M"), 1000000, 1000) 
+fifa$`Release Clause` <- gsub(pattern = "M", replacement = "", x= fifa$`Release Clause`)
+fifa$`Release Clause` <- gsub(pattern = "K", replacement = "", x= fifa$`Release Clause`)
+fifa$`Release Clause` <- as.numeric(fifa$`Release Clause`)
+
+#Drop loaned from as most rows are null
+fifa$`Loaned From` <- NULL
+
+#Drop X1 as redundant info
+fifa$X1 <- NULL
+
+#Convert joined to year format
+fifa$Joined <- gsub(pattern = ".*, ", replacement = "", x = fifa$Joined)
+fifa$Joined <- as.numeric(fifa$Joined)
+
+#Convert Contract Valid Until to numeric format
+fifa$`Contract Valid Until` <- as.numeric(fifa$`Contract Valid Until`)
+
+fifa2 <- fifa
+
+#Drop Multiply Value
+fifa2$MultiplyValue <- NULL
+
+#Convert all factors to numeric levels
+fifa2$Nationality <- as.numeric(fifa2$Nationality)
+fifa2$Club <- as.numeric(fifa2$Club)
+fifa2$`Preferred Foot` <- as.numeric(fifa2$`Preferred Foot`)
+fifa2$`Work Rate` <- as.numeric(fifa2$`Work Rate`)
+fifa2$`Body Type` <- as.numeric(fifa2$`Body Type`)
+fifa2$`Real Face` <- as.numeric(fifa2$`Real Face`)
+fifa2$Position <- as.numeric(fifa2$Position)
+
+fifa3 <- fifa2[complete.cases(fifa2), ]
+```
+
+```{r}
+#Find correlation between features
+cor(fifa3[,c(3:58)])
+```
+
+```{r}
+#VISUALIZE CORRELATION
+corrplot(cor(fifa3[,c(3:58)]), method = "color", type = "lower")
+```
+
+```{r}
+#EXPLORATORY DATA ANALYSIS
+
+#JERSEY NUMBER
+#Generally jersey numbers 7,10 are given to the most important players in the team.
+
+a <- sqldf('select avg(Value),"Jersey Number", count("Jersey Number"), avg(Overall) from fifa3 group by "Jersey Number"')
+
+#Jersey number vs Average Value
+plot(x = a$`Jersey Number`, y = a$`avg(Value)` ,type = "h", xlab = "Jersey Number", ylab = "Average Value")
+#Value goes up to jersey number 10 and then falls. Spikes beyond jersey number 40 are because very few players for that number thereby pushing up the average
+
+#Jersey number frequency
+plot(x = a$`Jersey Number`, y = a$`count("Jersey Number")` ,type = "h",xlab = "Jersey Number", ylab = "Count")
+#Squad sizes are capped at 35. So we see an exponential drop in player numbers after 35. Those beyond 35 are either reserve players or those who have taken the number for personal reasons
+```
+
+```{r}
+#AGE
+#Age vs Average Value
+b <- sqldf('select avg(Overall), Age from fifa3 group by Age')
+plot(x = b$Age, y = b$`avg(Overall)` ,type = "h", xlab = "Age", ylab = "Average Value")
+#Players rwach their peak in the late twenties and start to dip into their thirties
+```
+
+```{r}
+#LEFT OR RIGHT FOOTED PLAYERS
+c <- sqldf('select avg(Overall), avg(Value) from fifa3 group by "Preferred Foot"')
+c$`avg(Overall)`
+c$`avg(Value)`
+#Left footed players are marginally higher in Overall Score and value than Right footed players but can say no significant difference
+```
+
+```{r}
+#LONG SERVING PLAYERS
+
+d <- fifa3
+d$YearsAtClub <- 2018 - d$Joined
+d <- d[,c("YearsAtClub", "Overall", "Value")]
+e <- sqldf('select avg(Overall), avg(Value), count(YearsAtClub), YearsAtClub from d group by "YearsAtClub"')
+plot(x = e$YearsAtClub, y = e$`count(YearsAtClub)`,type = "h", xlab = "How many years at club?", ylab = "Number of players")
+#More than 40% of players are in their first year at their club
+```
+
+```{r}
+#YEARS LEFT ON THE CONTRACT
+
+f <- fifa3
+f$YearsLeft <- f$`Contract Valid Until` - 2018
+f <- f[,c("YearsLeft", "Overall", "Value")]
+g <- sqldf('select avg(Overall), avg(Value), count(YearsLeft), YearsLeft from f group by YearsLeft')
+plot(x = g$YearsLeft, y = g$`count(YearsLeft)`,type = "h", xlab = "How many years left at club?", ylab = "Number of players")
+#teams wait till last year or two before renewing contract of player
+```
+
+```{r}
+#TRAIN-TEST SPLIT FOR REGRESSION ALGORITHMS
+#Create data partition
+set.seed(123)
+# randomly order the dataset
+rows <- sample(nrow(fifa3))
+fifa3 <- fifa3[rows, ]
+
+# find rows to split on
+split <- round(nrow(fifa3) * 0.7)
+train.df <- fifa3[1:split, ]
+test.df <- fifa3[(split+1):nrow(fifa3), ]
+
+# confirm the size of the split
+round(nrow(train.df)/nrow(fifa3), digits = 3)
+
+train.df <- train.df[,-c(1:2)]
+test.df <- test.df[,-c(1:2)]
+```
+
+```{r}
+#LASSO REGRESSION
+# Custom Control Parameters
+tr <- trainControl(method = "repeatedcv", 
+                   number = 10, repeats = 5,
+                   verboseIter = TRUE)
+lassoReg <- train(Overall~., train.df, method = 'glmnet',
+                  tuneGrid = expand.grid(alpha = 1, 
+                                         lambda = seq(0.01, 0.4, length = 5)),
+                  trControl = tr)
+# print results
+print(lassoReg)
+
+# plot results
+plot(lassoReg)
+plot(lassoReg$finalModel, xvar = 'lambda', lwd =1.4, label=TRUE)
+plot(varImp(lassoReg, scale = TRUE))
+
+# Prediction Error: Training Data 
+pred1 <- predict(lassoReg, train.df)
+error1 <- (train.df$Overall - pred1)
+sqrt(mean((error1)^2))
+
+# Prediction Error: Test Data
+pred2 <- predict(lassoReg, test.df)
+error2 <- (test.df$Overall - pred2)
+sqrt(mean((error2)^2))
+
+test.df$Predicted <- pred2
+
+comp <- test.df[,c('Overall','Predicted')]
+
+test.df$Predicted <- NULL
+
+hist(error2)
+
+coef(lassoReg$finalModel, lassoReg$bestTune$lambda)
+```
+
+```{r}
+#ELASTIC NET REGRESSION
+set.seed(123)
+enetReg <- train(Overall~., train.df, method = 'glmnet',
+                 tuneGrid = expand.grid(alpha = seq(0, 1, length = 10), 
+                                        lambda = seq(0.01, 0.4, length = 10)),
+                 trControl = tr)
+# print best-tuned results
+enetReg$bestTune
+
+# plot results
+plot(enetReg)  # alpha is the mixing parameter and lambda is the regularization parameter
+plot(enetReg$finalModel, xvar = 'lambda', lwd =1.4, label=TRUE)
+plot(varImp(enetReg, scale = TRUE))
+
+# Prediction Error: Training Data 
+pred1e <- predict(enetReg, train.df)
+error1e <- (train.df$Overall - pred1e)
+sqrt(mean((error1e)^2))
+
+# Prediction Error: Test Data
+pred2e <- predict(enetReg, test.df)
+error2e <- (test.df$Overall - pred2e)
+sqrt(mean((error2e)^2))
+
+test.df$Predicted <- pred2e
+
+
+compE <- test.df[,c('Overall','Predicted')]
+
+test.df$Predicted <- NULL
+
+hist(error2e)
+plot(error2e,type = 'h')
+
+coef(enetReg$finalModel, enetReg$bestTune$lambda)
+```
